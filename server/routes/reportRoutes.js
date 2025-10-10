@@ -5,6 +5,6 @@ import { createReport } from '../controllers/reportController.js';
 
 const reportRouter = express.Router();
 
-reportRouter.post('/report', userAuth, createReport);
+reportRouter.post('/', userAuth, createReport);
 
 export default reportRouter;
