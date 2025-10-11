@@ -1,7 +1,7 @@
 import Question from "../models/Question.js";
 import Answer from "../models/Answer.js";
 import User from "../models/User.js";
-import Vote from "../models/Votes.js"
+import Vote from "../models/Votes.js";
 
 //post question
 export const addQuestion = async (req,res)=>{
@@ -107,12 +107,35 @@ export const searchQuestions = async (req, res) => {
 //fetchAllquestions
 export const fetchAllQuestions = async(req,res)=>{
     try{
-        const allQuestions = await Question.find();
+        const allQuestions = await Question.find()
+            .populate({
+                path: 'author',
+                select: 'name email',
+                transform: doc => {
+                    // If question is anonymous, only return "Anonymous" as name
+                    if (doc && doc._doc.isAnonymous) {
+                        return { name: 'Anonymous' };
+                    }
+                    return doc;
+                }
+            });
+
+        // Transform the response to handle anonymous posts
+        const formattedQuestions = allQuestions.map(question => {
+            if (question.isAnonymous) {
+                // If anonymous, don't expose author details
+                return {
+                    ...question._doc,
+                    author: { name: 'Anonymous' }
+                };
+            }
+            return question;
+        });
 
         return res.status(200).json({
-            success:true,
-            message:"successfully fetched all questions",
-            allQuestions
+            success: true,
+            message: "successfully fetched all questions",
+            allQuestions: formattedQuestions
         })
     }catch(error){
         return res.status(500).json({

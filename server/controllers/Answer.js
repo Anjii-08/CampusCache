@@ -25,7 +25,7 @@ export const postAnswer = async(req,res)=>{
         if(!questionDetails){
             return res.status(400).json({
                 success:false,
-                message:"Question doesnt exists"
+                message:"Question doesn't exists"
             })
         }
 
@@ -67,7 +67,7 @@ export const fetchAnswers = async(req,res)=>{
     }
 
     try{
-        const allAnswers = (await Answer.find({question:questionId})).sort({score:-1});
+        const allAnswers = await Answer.find({question:questionId}).sort({score: -1});
         return res.status(200).json({
             success:true,
             message:"Successfully fetched all answers",

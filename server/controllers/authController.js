@@ -9,6 +9,16 @@ export const register = async (request,response)=>{
     if(!name || !email || !password){
         return response.status(400).json({success:false,message:"Missing Details"});
     }
+
+    // Validate student email format
+    const role = request.body.role || "Student";  // Default to Student if not specified
+    if (role === "Student" && !email.endsWith("@student.nitw.ac.in")) {
+        return response.status(400).json({
+            success: false,
+            message: "Student email must end with @student.nitw.ac.in"
+        });
+    }
+
     try{
         const existingUser = await userModel.findOne({email});
         if(existingUser && existingUser.isAccountVerified){
@@ -101,6 +111,18 @@ export const login = async (request,response)=>{
     if(!email || !password){
         return response.status(400).json({success:false,message:"Email and password are required!"});
     }
+
+    // Additional validation for student email
+    if (email.toLowerCase().endsWith("@student.nitw.ac.in")) {
+        const role = "Student";  // Force role to be Student for student email domains
+        request.body.role = role;
+    } else {
+        return response.status(400).json({
+            success: false,
+            message: "Please use your NITW email address"
+        });
+    }
+
     try{
         const user = await userModel.findOne({email});
         if(!user){

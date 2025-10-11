@@ -15,6 +15,6 @@ adminRouter.get('/reports/in-process', adminAuth, getInProcessReports);
 adminRouter.get('/reports/resolved', adminAuth, getResolvedReports);
 
 adminRouter.put('/reports/claim/:contentId', adminAuth, claimReport);
-adminRouter.post('/reports/resolve/:reportId', adminAuth, resolveReport);
+adminRouter.post('/reports/resolve/:contentId', adminAuth, resolveReport);
 
 export default adminRouter;

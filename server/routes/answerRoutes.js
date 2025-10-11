@@ -6,7 +6,7 @@ const answerRouter =express.Router();
 
 
 answerRouter.post("/add-answer",userAuth,postAnswer);
-answerRouter.get("/get-answer",fetchAnswers);
+answerRouter.get("/get-answer",userAuth,fetchAnswers);
 answerRouter.get("/user-answer",userAuth,fetchUserAnswers);
 answerRouter.delete("/delete-answer",userAuth,deleteAnswer);
 
