@@ -49,7 +49,7 @@ const QuestionsSection = () => {
         setIsFiltered(true);
       }
     } catch (error) {
-      toast.error('Failed to search questions');
+      toast.error('Failed to search questions: ',error.message);
     } finally {
       setLoading(false);
     }
