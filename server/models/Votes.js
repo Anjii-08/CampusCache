@@ -11,9 +11,20 @@ const voteSchema = new mongoose.Schema({
         required: true,
         ref:"Answer"
     },
-    voteType: {
-        type: Number // Should be 1 for upvote, -1 for downvote
+    usefulnessScore: {
+        type: Number,
+        required: true,
+        min: 0,
+        max: 1,
+        validate: {
+            validator: function(v) {
+                return v >= 0 && v <= 1;
+            },
+            message: 'Usefulness score must be between 0 and 1'
+        }
     }
+}, {
+    timestamps: true // Add timestamps to track voting history
 });
 
 export default mongoose.model("Vote", voteSchema);

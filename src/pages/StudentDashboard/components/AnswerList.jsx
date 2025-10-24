@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
+import axios from 'axios';
+import VoteSlider from './VoteSlider';
+import { AppContent } from '../../../context/AppContext';
 
 const AnswerList = ({ answers, loading, onDelete, onReport, isUserAnswer }) => {
+  const { backendUrl, userData } = useContext(AppContent);
   const [reportingAnswer, setReportingAnswer] = useState(null);
   const [reportReason, setReportReason] = useState('');
 
@@ -39,14 +43,26 @@ const AnswerList = ({ answers, loading, onDelete, onReport, isUserAnswer }) => {
     <div className="space-y-4">
       {answers.map((answer) => (
         <div key={answer._id} className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-          <div className="flex justify-between items-start mb-4">
-            <div>
+          <div className="flex items-start gap-6">
+            {/* Vote Slider */}
+            {!isUserAnswer(answer) && (
+              <div className="flex-shrink-0 flex items-center justify-center">
+                <VoteSlider
+                  answerId={answer._id}
+                  initialValue={answer.usefulnessScore || 0.5}
+                />
+              </div>
+            )}
+            
+            {/* Answer Content */}
+            <div className="flex-1">
               <h3 className="text-lg font-semibold text-gray-800 mb-2">
                 Re: {answer.question?.title || 'Question not available'}
               </h3>
-              <p className="text-gray-600">{answer.content}</p>
+              <p className="text-gray-600 whitespace-pre-wrap">{answer.content}</p>
             </div>
-            <div className="flex items-center gap-2">
+            
+            <div className="flex-shrink-0">
               {isUserAnswer(answer) ? (
                 <button
                   onClick={() => onDelete(answer._id)}

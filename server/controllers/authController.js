@@ -1,8 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import userModel from '../models/User.js';
-import transporter from '../config/nodemailer.js';
-import { EMAIL_VERIFY_TEMPLATE,PASSWORD_RESET_TEMPLATE } from '../config/emailTemplates.js';
+import { generateOTP, storeOTP, verifyOTP, isEmailVerified, clearOTPData } from '../utils/localOTP.js';
 
 
 export const register = async (request,response)=>{
@@ -31,28 +30,18 @@ export const register = async (request,response)=>{
         
         const hashedPassword = await bcrypt.hash(password,10);
         
-        // Generate OTP
-        const otp = String(Math.floor(100000+Math.random()*900000));
+        // Generate and store OTP locally
+        const otp = generateOTP();
+        storeOTP(email, otp);
         
         const user = new userModel({
             name,
             email,
-            password:hashedPassword,
-            verifyOtp: otp,
-            verifyOtpExpireAt: Date.now() + 15 * 60 * 1000 // OTP expires in 15 minutes
+            password: hashedPassword,
+            isAccountVerified: false
         });
 
-
         await user.save();
-        
-        // Send verification email
-        const mailOptions = {
-            from: process.env.SENDER_EMAIL,
-            to: email,
-            subject: `Verify Your Account`,
-            html : EMAIL_VERIFY_TEMPLATE.replace("{{otp}}",otp).replace("{{email}}",user.email)
-        }
-        await transporter.sendMail(mailOptions);
         return response.status(200).json({success:true,message:"Registration successful! Please check your email to verify your account."});
 
     }catch(error){
@@ -75,19 +64,15 @@ export const verifyRegistration = async (request, response) => {
         if (user.isAccountVerified) {
             return response.status(400).json({ success: false, message: "Account already verified." });
         }
-        
-        if (user.verifyOtp !== otp) {
-            return response.status(400).json({ success: false, message: "Invalid OTP." });
-        }
 
-        if (user.verifyOtpExpireAt < Date.now()) {
-            return response.status(400).json({ success: false, message: "OTP has expired. Please register again to get a new one." });
+        const verificationResult = verifyOTP(email, otp);
+        if (!verificationResult.valid) {
+            return response.status(400).json({ success: false, message: verificationResult.message });
         }
 
         user.isAccountVerified = true;
-        user.verifyOtp = '';
-        user.verifyOtpExpireAt = 0;
         await user.save();
+        clearOTPData(email);
 
         const token = jwt.sign({id:user._id},process.env.JWT_SECRET,{expiresIn:'1d'});
 
@@ -176,21 +161,10 @@ export const sendResetOtp = async (request,response)=>{
         if(!user){
             return response.status(404).json({success:false,message:"User not found!"});
         }
-        const otp = String(Math.floor(100000+Math.random()*900000));
-
-        user.resetOtp = otp;
-        user.resetOtpExpireAt = Date.now()+15*60*1000;
-
-        await user.save();
-
-        const mailOptions = {
-            from: process.env.SENDER_EMAIL,
-            to: user.email,
-            subject: `Password reset OTP`,
-            html:PASSWORD_RESET_TEMPLATE.replace("{{otp}}",otp).replace("{{email}}",user.email)
-        }
-
-        await transporter.sendMail(mailOptions);
+        
+        // Generate and store OTP locally for password reset
+        const otp = generateOTP();
+        storeOTP(email, otp);
         return response.status(200).json({success:true,message:"Password reset OTP sent successfully"});
 
     }catch(error){
@@ -198,7 +172,7 @@ export const sendResetOtp = async (request,response)=>{
     }
 };
 
-export const resetPassword = async  (request,response)=>{
+export const resetPassword = async (request,response)=>{
     const {email,otp,newPassword} = request.body;
     if(!email || !otp || !newPassword){
         return response.status(400).json({success:false,message:"Missing required details!"});      
@@ -210,19 +184,14 @@ export const resetPassword = async  (request,response)=>{
             return response.status(404).json({success:false,message:"User not found"});
         }
 
-        if(user.resetOtp==='' || user.resetOtp!==otp){
-            return response.status(400).json({success:false,message:"Invalid Otp"}); 
-        }
-
-        if(user.resetOtpExpireAt<Date.now()){
-            return response.status(400).json({success:false,message:"Otp Expired"}); 
+        const verificationResult = verifyOTP(email, otp);
+        if (!verificationResult.valid) {
+            return response.status(400).json({ success: false, message: verificationResult.message });
         }
 
         const hashedPassword = await bcrypt.hash(newPassword,10);
-        
         user.password = hashedPassword;
-        user.resetOtp = '';
-        user.resetOtpExpireAt = 0;
+        clearOTPData(email);
 
         await user.save();
         return response.status(200).json({success:true,message:"Password reset Successfull"});

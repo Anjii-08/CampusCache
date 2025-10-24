@@ -23,11 +23,36 @@ const userSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
-    verifyOtp:{type:String,default:''},
-    verifyOtpExpireAt:{type:Number,default:0},
-    isAccountVerified:{type:Boolean,default:false},
-    resetOtp:{type:String,default:''},  
-    resetOtpExpireAt:{type:Number,default:0},
+    isAccountVerified: {
+        type: Boolean,
+        default: false
+    },
+    reputation: {
+        score: {
+            type: Number,
+            default: 10 // Base reputation for new users
+        },
+        questionCount: {
+            type: Number,
+            default: 0
+        },
+        answerCount: {
+            type: Number,
+            default: 0
+        },
+        validReportCount: {
+            type: Number,
+            default: 0
+        },
+        voteWeight: {
+            type: Number,
+            default: 1,
+            min: 1,
+            max: 5 // Maximum vote weight multiplier
+        }
+    }
+}, {
+    timestamps: true
 });
 
 

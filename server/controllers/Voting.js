@@ -1,69 +1,133 @@
 import Vote from "../models/Votes.js";
-import Answer from "../models/Answer.js"
+import Answer from "../models/Answer.js";
+import User from "../models/User.js";
 
+// Helper function to calculate reputation changes
+const calculateReputationChange = (action, value = 1) => {
+    const changes = {
+        'question_post': 5,
+        'answer_post': 10,
+        'answer_vote_received': value * 2,
+        'valid_report': -5
+    };
+    return changes[action] || 0;
+};
+
+// Helper function to update user reputation
+const updateUserReputation = async (userId, action, value = 1) => {
+    const change = calculateReputationChange(action, value);
+    
+    const user = await User.findById(userId);
+    if (!user) return null;
+
+    // Update reputation score
+    user.reputation.score += change;
+
+    // Update activity counts
+    switch(action) {
+        case 'question_post':
+            user.reputation.questionCount += 1;
+            break;
+        case 'answer_post':
+            user.reputation.answerCount += 1;
+            break;
+        case 'valid_report':
+            user.reputation.validReportCount += 1;
+            break;
+    }
+
+    // Calculate vote weight based on reputation and activity
+    const activityScore = (user.reputation.questionCount * 0.3) + 
+                         (user.reputation.answerCount * 0.5) - 
+                         (user.reputation.validReportCount * 1.0);
+    
+    user.reputation.voteWeight = Math.min(
+        Math.max(
+            1, // Minimum weight
+            1 + (user.reputation.score / 100) + (activityScore / 50)
+        ),
+        5 // Maximum weight
+    );
+
+    await user.save();
+    return user;
+};
 
 //add new vote
 export const addVote = async (req,res)=>{
-    const userId = req.body.userId;
-    const {answerId, voteType} = req.body;
+    const { userId, answerId, usefulnessScore } = req.body;
 
-    if(!answerId || !userId || !voteType){
-        return res.status(406).json({
-            success:false,
-            message:"Please provide all required fields"
+    if (!userId || !answerId || typeof usefulnessScore !== 'number' || usefulnessScore < 0 || usefulnessScore > 1) {
+        return res.status(400).json({
+            success: false,
+            message: "Please provide all required fields. Usefulness score must be between 0 and 1"
         });
     }
 
     try {
-        // Check if user has already voted
-        const existingVote = await Vote.findOne({voter: userId, answerId});
-        
-        if(existingVote) {
-            if(existingVote.voteType === voteType) {
-                // If voting the same way, remove the vote
-                await Vote.findOneAndDelete({voter: userId, answerId});
-                const updatedAnswer = await Answer.findByIdAndUpdate(
-                    answerId,
-                    {$inc: {score: -voteType}},
-                    {new: true}
-                );
-                return res.status(200).json({
-                    success: true,
-                    message: "Vote removed successfully",
-                    answer: updatedAnswer,
-                    voteStatus: null
-                });
-            } else {
-                // If changing vote direction, update the vote
-                existingVote.voteType = voteType;
-                await existingVote.save();
-                const updatedAnswer = await Answer.findByIdAndUpdate(
-                    answerId,
-                    {$inc: {score: voteType * 2}}, // Multiply by 2 because we're changing from -1 to 1 or vice versa
-                    {new: true}
-                );
-                return res.status(200).json({
-                    success: true,
-                    message: "Vote updated successfully",
-                    answer: updatedAnswer,
-                    voteStatus: voteType
-                });
-            }
+        // Get voter's reputation weight
+        const voter = await User.findById(userId);
+        if (!voter) {
+            return res.status(404).json({
+                success: false,
+                message: "Voter not found"
+            });
         }
 
-        // If no existing vote, create new vote
+        const voteWeight = voter.reputation.voteWeight;
+        const weightedScore = usefulnessScore * voteWeight;
+
+        // Check for existing vote
+        const existingVote = await Vote.findOne({ voter: userId, answerId });
+        
+        if (existingVote) {
+            // Calculate score difference
+            const oldWeightedScore = existingVote.usefulnessScore * voteWeight;
+            const scoreDifference = weightedScore - oldWeightedScore;
+
+            // Update vote
+            existingVote.usefulnessScore = usefulnessScore;
+            await existingVote.save();
+
+            // Update answer score
+            const updatedAnswer = await Answer.findByIdAndUpdate(
+                answerId,
+                { $inc: { score: scoreDifference } },
+                { new: true }
+            ).populate('author');
+
+            // Update answer author's reputation
+            if (updatedAnswer && updatedAnswer.author) {
+                await updateUserReputation(
+                    updatedAnswer.author._id,
+                    'answer_vote_received',
+                    scoreDifference
+                );
+            }
+
+            return res.status(200).json({
+                success: true,
+                message: "Vote updated successfully",
+                answer: updatedAnswer,
+                voteWeight
+            });
+        }
+
+        // Create new vote
         const newVote = new Vote({
             voter: userId,
             answerId,
-            voteType
+            usefulnessScore
         });
 
         await newVote.save();
+
+        // Update answer score
         const updatedAnswer = await Answer.findByIdAndUpdate(
             answerId,
-            {$inc: {score: voteType}},
-            {new: true}
-        );
+            { $inc: { score: weightedScore } },
+            { new: true }
+        ).populate('author');
 
         return res.status(200).json({
             success: true,
